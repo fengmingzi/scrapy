@@ -15,7 +15,7 @@ SPIDER_MODULES = ['scrapyuniversal.spiders']
 NEWSPIDER_MODULE = 'scrapyuniversal.spiders'
 
 
-SPLASH_URL = 'http://127.0.0.1:8050'
+SPLASH_URL = 'http://10.138.106.204:8050'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'scrapyuniversal (+http://www.yourdomain.com)'
