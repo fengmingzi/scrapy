@@ -1,0 +1,57 @@
+{
+  "spider": "universal",
+  "website": "中华网科技",
+  "type": "家电",
+  "index": "http://diy.haier.com/",
+  "settings": {
+    "USER_AGENT": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36"
+  },
+  "start_urls": {
+    "type": "static",
+    "value": [
+      "http://diy.haier.com/pc/goods/list?shopId=12"
+    ]
+  },
+  "allowed_domains": [
+    "diy.haier.com"
+  ],
+  "rules": "china",
+  "item": {
+    "class": "NewsItem",
+    "loader": "ChinaLoader",
+    "attrs": {
+      "title": [
+        {
+          "method": "xpath",
+          "args": [
+            "//div[@class='pro-property']/div[@class='pro-info']/h2/text()"
+          ]
+        }
+      ],
+      "url": [
+        {
+          "method": "attr",
+          "args": [
+            "url"
+          ]
+        }
+      ],
+      "text": [
+        {
+          "method": "xpath",
+          "args": [
+            "//div[@class='pro-property']/div[@class='pro-info']/p/text()"
+          ]
+        }
+      ],
+      "website": [
+        {
+          "method": "value",
+          "args": [
+            "定制家电"
+          ]
+        }
+      ]
+    }
+  }
+}
