@@ -47,15 +47,16 @@ class UniversalSpider(CrawlSpider):
                     splash.images_enabled = false
                     splash:go(splash.args.url)
                     splash:wait(2)
-                    splash:runjs("document.querySelector('.laypage_next').click()")
+                    js = string.format("document.querySelector('.laypage_next').setAttribute('data-page',%d);document.querySelector('.laypage_next').click()", splash.args.page)
+                    splash:runjs(js)
                     splash:wait(2)
                     return splash:html()
                 end
             '''
 
-
-            # yield Request(url)
-            yield SplashRequest(url, endpoint='execute', args={'lua_source': lua_script})
+            for page in range(1, 4):
+                # yield Request(url)
+                yield SplashRequest(url, callback=self.parse, endpoint='execute', args={'lua_source': lua_script, 'page': page})
 
     # 重写parse，处理start_url页面，为了实现翻页功能
     def parse1(self, response):
