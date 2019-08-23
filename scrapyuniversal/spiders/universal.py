@@ -47,7 +47,7 @@ class UniversalSpider(CrawlSpider):
                     splash.images_enabled = false
                     splash:go(splash.args.url)
                     splash:wait(2)
-                    splash:runjs("document.getElementsByClassName('laypage_next').click()")
+                    splash:runjs("document.querySelector('.laypage_next').click()")
                     splash:wait(2)
                     return splash:html()
                 end
@@ -77,7 +77,7 @@ class UniversalSpider(CrawlSpider):
         '''
 
         # 拿到start_url列表页，然后不断点击
-        yield SplashRequest(response.url, endpoint='execute', args={'lua_source': lua_script}, cache_args=['lua_source'], dont_filter=True)
+        yield SplashRequest(response.url, endpoint='execute', args={'lua_source': lua_script}, dont_filter=True)
         # 点击下一页按钮，
         # 根据start_url的response实现翻页，并加入request中
         # 获取翻页的xpath拿到url，或者根据事件实现翻页
