@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
-from scrapy.linkextractors import LinkExtractor
-from scrapy.spiders import CrawlSpider, Rule
-from scrapyuniversal.items import *
-from scrapyuniversal.loaders import *
-from scrapyuniversal.utils import get_config
-from scrapyuniversal import urls
-from scrapyuniversal.rules import SpiderRules
+from scrapy.spiders import CrawlSpider
 from scrapy_splash import SplashRequest
-from scrapy.http import Request
+
+from scrapyuniversal import luas
+from scrapyuniversal.rules import SpiderRules
+from scrapyuniversal.utils import get_config
+
 
 class UniversalSpider(CrawlSpider):
     name = 'universal'
@@ -18,11 +16,22 @@ class UniversalSpider(CrawlSpider):
         self.config = config
 
 
-        # rules配置
-        self.rules = SpiderRules(detailUrlXpaths='//div[@class="p-con"]/div[@class="p-box"]/ul[@class="products"]',
-                                 detailTags=('a', 'area'),
-                                 detailAttrs=('href',), detailCallback='parse_item', isSplash=True).rules.get(config.get('rules'))
+        self.pageType = 1 # 翻页类型，根据分页类型判断使用翻页方式
+        self.pageTotal = 4 # 总页数，事件点击的翻页需要配置总页数
+        self.detailUrlXpaths = '//div[@class="p-con"]/div[@class="p-box"]/ul[@class="products"]' #详情页链接xpath
+        self.pageXpaths = '//div[@id="pageStyle"]//a[contains(., "下一页")]'
+        self.selector = '.laypage_next'
+        self.attribute = 'data-page'
+        self.title = '//div[@class="pro-property"]/div[@class="pro-info"]/h2/text()'
+        self.text = '//div[@class="pro-property"]/div[@class="pro-info"]/p/text()'
+
         # self.rules = rules.get(config.get('rules'))
+        # 根据分页类型获取rules
+        if self.pageType == 0:
+            # rules配置
+            self.rules = SpiderRules(detailUrlXpaths=self.detailUrlXpaths, pageXpaths=self.pageXpaths, detailCallback='parse_item', isSplash=False).rules.get('ruleHref')
+        elif self.pageType == 1:
+            self.rules = SpiderRules(detailUrlXpaths=self.detailUrlXpaths, detailCallback='parse_item').rules.get('ruleClick')
 
         # start_urls配置
         start_urls = config.get('start_urls')
@@ -41,59 +50,33 @@ class UniversalSpider(CrawlSpider):
         for url in self.start_urls:
             print("进入首页")
             print(url)
-            # splash:runjs("document.getElementsByClassName('laypage_next').click()")   "document.querySelector('#laypage_2 a.laypage_next').click()"
-            lua_script = '''
-                function main(splash)
-                    splash.images_enabled = false
-                    splash:go(splash.args.url)
-                    splash:wait(2)
-                    js = string.format("document.querySelector('.laypage_next').setAttribute('data-page',%d);document.querySelector('.laypage_next').click()", splash.args.page)
-                    splash:runjs(js)
-                    splash:wait(2)
-                    return splash:html()
-                end
-            '''
+            yield SplashRequest(url, callback=self.parse_urls, endpoint='execute', args={'lua_source': luas.luaSimple, 'images': False})
 
-            for page in range(1, 4):
-                # yield Request(url)
-                yield SplashRequest(url, callback=self.parse, endpoint='execute', args={'lua_source': lua_script, 'page': page})
-
-    # 重写parse，处理start_url页面，为了实现翻页功能
-    def parse1(self, response):
-
-        # 拿到入口页的详情链接
-
-
-        # 拿到下一页xpath，判断是否有下一页的属性
-
-        #如果有下一页
-        lua_script = '''
-            function main(splash)
-                splash:go(splash.args.url)
-                splash:wait(2)
-                splash:runjs("document.getElementsByClassName('laypage_next').click()")
-                splash:wait(2)
-                return splash:html()
-            end
-        '''
-
-        # 拿到start_url列表页，然后不断点击
-        yield SplashRequest(response.url, endpoint='execute', args={'lua_source': lua_script}, dont_filter=True)
-        # 点击下一页按钮，
-        # 根据start_url的response实现翻页，并加入request中
-        # 获取翻页的xpath拿到url，或者根据事件实现翻页
-
+    # 从start_requests方法回调到此方法，便于对当前列表页信息进行获取，例如获取总页数，实现分页等
     def parse_urls(self, response):
-        # 调用_requests_to_follow方法，根据Rule规则获取所有的详情页
-        self._requests_to_follow(response)  # 列表页response
-
+        if self.pageType == 0:  # 有fref
+            # yield Request(response.url, dont_filter=True)
+            yield SplashRequest(response.url, callback=self.parse, endpoint='execute', args={'lua_source': luas.luaSimple, 'images': False})
+        elif self.pageType == 1:  # 有页码点击翻页
+            for page in range(1, self.pageTotal):
+                js = "document.querySelector('{selector}').setAttribute('{attribute}',{page});document.querySelector('{selector}').click()".format(
+                    selector=self.selector, attribute=self.attribute, page=page)
+                yield SplashRequest(response.url, callback=self.parse, endpoint='execute',
+                                    args={'lua_source': luas.luaScript, 'js': js, 'images': False})
+        else:  # 无页码点击翻页
+            for page in range(1, self.pageTotal):
+                if page == 1:
+                    yield SplashRequest(response.url, callback=self.parse, endpoint='execute',
+                                        args={'lua_source': luas.luaSimple, 'images': False})
+                else:
+                    if page > 2:
+                        break
+                    js = "document.querySelector('{selector}').click()".format(selector=self.selector)
+                    yield SplashRequest(response.url, callback=self.parse, endpoint='execute',
+                                        args={'lua_source': luas.luaScript, 'js': js, 'images': False})
 
     # 处理Rule中增加process_request参数为splash_request的Request请求
     def splash_request(self, request, response):
-        """
-        :param request: Request对象（是一个字典；怎么取值就不说了吧！！）
-        :return: SplashRequest的请求
-        """
         # dont_process_response=True 参数表示不更改响应对象类型（默认为：HTMLResponse；更改后为：SplashTextResponse）
         # args={'wait': 0.5} 表示传递等待参数0.5（Splash会渲染0.5s的时间）
         # meta 传递请求的当前请求的URL
@@ -101,10 +84,6 @@ class UniversalSpider(CrawlSpider):
         return SplashRequest(url=request.url, args={'wait': 0.5})
 
     def _requests_to_follow(self, response):
-        """重写的函数哈！这个函数是Rule的一个方法
-        :param response: 这货是啥看名字都知道了吧（这货也是个字典，然后你懂的ｄ(･∀･*)♪ﾟ）
-        :return: 追踪的Request
-        """
         # *************请注意我就是被注释注释掉的类型检查o(TωT)o 
         # if not isinstance(response, HtmlResponse):
         #     return
@@ -132,11 +111,17 @@ class UniversalSpider(CrawlSpider):
         if item:
             cls = eval(item.get('class'))()
             loader = eval(item.get('loader'))(cls, response=response)
+
             # 动态获取属性配置
-            for key, value in item.get('attrs').items():
-                for extractor in value:
+            for key, value in item.get('attrs').items(): #attrs是json，json——>items
+                for extractor in value: #value:数组，extractor：json
                     if extractor.get('method') == 'xpath':
-                        loader.add_xpath(key, *extractor.get('args'), **{'re': extractor.get('re')})
+                        args = extractor.get('args') #数组
+                        if key == 'title':
+                            args = [self.title]
+                        elif key == 'text':
+                            args = [self.text]
+                        loader.add_xpath(key, *args, **{'re': extractor.get('re')})
                     if extractor.get('method') == 'css':
                         loader.add_css(key, *extractor.get('args'), **{'re': extractor.get('re')})
                     if extractor.get('method') == 'value':
